@@ -1,0 +1,92 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Distributed;
+using OpenAI;
+
+namespace YourNamespace
+{
+    [ApiController]
+    [Route("api/chat")]
+    public class ChatController : ControllerBase
+    {
+        private readonly IDistributedCache _cache;
+
+        public ChatController(IDistributedCache cache)
+        {
+            _cache = cache;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Post([FromBody] ChatRequest request)
+        {
+            // 从请求中获取用户问题和会话 ID
+            string userQuestion = request.Question;
+            string sessionId = request.SessionId;
+
+            // 从缓存中获取上下文
+            string context = await _cache.GetStringAsync(sessionId);
+
+            // 将用户问题与上下文合并
+            string mergedQuestion = MergeQuestionWithContex(userQuestion, context);
+
+            // 调用 Azure OpenAI ChatGPT 服务进行生成
+            string modelReply = await CallOpenAIChatGPT(mergedQuestion);
+
+            // 将生成的回复与上下文合并
+            string mergedContext = MergeContextWithContext(modelReply, context);
+
+            // 将合并后的上下文存储回缓存
+            await _cache.SetStringAsync(sessionId, mergedContext);
+
+            // 返回模型回复
+            return Ok(new ChatResponse
+            {
+                Reply = modelReply,
+                SessionId = sessionId
+            });
+        }
+
+        private async Task<string> CallOpenAIChatGPT(string input)
+        {
+            OpenAIApi openAiApi = new OpenAIApi("your-api-key");
+            CompletionResponse response = await openAiApi.CompleteConversationAsync(
+                model: "text-davinci-002",
+                messages: new List<OpenAIApi.Message>
+                {
+                    new OpenAIApi.Message
+                    {
+                        Role = "system",
+                        Content = input
+                    }
+                });
+
+            string modelReply = response.Choices[0].Message.Content;
+            return modelReply;
+        }
+
+        private string MergeQuestionWithContex(string question, string context)
+        {
+            // 实现根据需要合并问题和上下文的逻辑
+            // 这里只是简单地将问题和上下文连接在一起
+            return $"{question} {context}";
+        }
+
+        private string MergeContextWithContext(string modelReply, string context)
+        {
+            // 实现根据需要合并回复和上下文的逻辑
+            // 这里只是简单地将回复和上下文连接在一起
+            return $"{modelReply} {context}";
+        }
+    }
+
+    public class ChatRequest
+    {
+        public string Question { get; set; }
+        public string SessionId { get; set; }
+    }
+
+    public class ChatResponse
+    {
+        public string Reply { get; set; }
+        public string SessionId { get; set; }
+    }
+}
