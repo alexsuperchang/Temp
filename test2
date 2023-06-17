@@ -1,0 +1,91 @@
+在 ASP.NET Core Web API 中，您可以使用依赖注入和请求上下文来实现每个用户的连续性和独立性。以下是一个示例，展示如何在 ASP.NET Core Web API 中管理 OpenAI 客户端对象：
+
+首先，在 `Startup.cs` 文件的 `ConfigureServices` 方法中进行依赖注入的配置：
+
+```csharp
+public void ConfigureServices(IServiceCollection services)
+{
+    // 注册 OpenAI 客户端对象
+    services.AddSingleton<OpenAIClient>(sp =>
+    {
+        string apiKey = "YOUR_API_KEY";
+        string endpoint = "https://api.openai.com";
+        return new OpenAIClient(apiKey, endpoint);
+    });
+
+    // 添加会话支持
+    services.AddSession();
+
+    // 添加其他服务配置
+    // ...
+}
+```
+
+在上述代码中，我们使用 `AddSingleton` 方法将 OpenAI 客户端对象注册为单例服务。这样，在每个请求中，都会使用同一个客户端对象。
+
+接下来，在需要使用 OpenAI 客户端对象的控制器中，通过构造函数注入它：
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class YourController : ControllerBase
+{
+    private readonly OpenAIClient _openAIClient;
+
+    public YourController(OpenAIClient openAIClient)
+    {
+        _openAIClient = openAIClient;
+    }
+
+    [HttpGet]
+    public IActionResult Get()
+    {
+        // 使用注入的 OpenAI 客户端对象进行操作
+        // ...
+
+        return Ok();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Post([FromBody] RequestModel model)
+    {
+        string prompt = model.Prompt;
+        int maxTokens = 50;
+        double temperature = 0.5;
+
+        var generatedText = await GenerateText(prompt, maxTokens, temperature);
+
+        return Ok(generatedText);
+    }
+
+    private async Task<string> GenerateText(string prompt, int maxTokens, double temperature)
+    {
+        // 使用注入的 OpenAI 客户端对象进行调用
+        // ...
+
+        return generatedText;
+    }
+}
+
+public class RequestModel
+{
+    public string Prompt { get; set; }
+}
+```
+
+在上述代码中，我们通过构造函数注入了 OpenAI 客户端对象（`OpenAIClient`），以便在控制器的方法中使用它。每个请求都会使用相同的客户端对象，以确保连续性和独立性。
+
+确保在 `Configure` 方法中启用会话支持：
+
+```csharp
+public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+{
+    // 添加会话中间件
+    app.UseSession();
+
+    // 其他中间件配置
+    // ...
+}
+```
+
+通过使用依赖注入和会话支持，我们可以在 ASP.NET Core Web API 中管理 OpenAI 客户端对象，并确保每个用户的请求之间的连续性和独立性。每个用户的会话是独立的，彼此不会相互干扰。
