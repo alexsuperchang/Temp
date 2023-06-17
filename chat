@@ -9,10 +9,13 @@ namespace YourNamespace
     public class ChatController : ControllerBase
     {
         private readonly IDistributedCache _cache;
+        private readonly OpenAIClient _openAIClient;
+        private const string ApiKey = "your-api-key";
 
         public ChatController(IDistributedCache cache)
         {
             _cache = cache;
+            _openAIClient = new OpenAIClient(ApiKey);
         }
 
         [HttpPost]
@@ -47,19 +50,22 @@ namespace YourNamespace
 
         private async Task<string> CallOpenAIChatGPT(string input)
         {
-            OpenAIApi openAiApi = new OpenAIApi("your-api-key");
-            CompletionResponse response = await openAiApi.CompleteConversationAsync(
-                model: "text-davinci-002",
-                messages: new List<OpenAIApi.Message>
+            var chatRequest = new OpenAIApiCompletionRequest
+            {
+                Model = "text-davinci-002",
+                Messages = new List<OpenAIApiCompletionMessage>
                 {
-                    new OpenAIApi.Message
+                    new OpenAIApiCompletionMessage
                     {
                         Role = "system",
                         Content = input
                     }
-                });
+                }
+            };
 
-            string modelReply = response.Choices[0].Message.Content;
+            var response = await _openAIClient.CreateCompletionAsync(chatRequest);
+
+            string modelReply = response.Choices[0].Text.Trim();
             return modelReply;
         }
 
