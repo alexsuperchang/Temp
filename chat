@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
+using OpenAI;
 
 namespace YourNamespace.Controllers
 {
@@ -18,55 +15,54 @@ namespace YourNamespace.Controllers
             _httpContextAccessor = httpContextAccessor;
         }
 
+        [HttpGet]
+        public IActionResult Get()
+        {
+            var session = _httpContextAccessor.HttpContext.Session;
+
+            // 检查会话中是否存在先前的 OpenAI 客户端对象
+            if (session.TryGetValue("OpenAIClient", out byte[] clientBytes))
+            {
+                var openAIClient = OpenAIClient.FromJson(Encoding.UTF8.GetString(clientBytes));
+
+                // 使用先前的 OpenAI 客户端对象进行操作
+                // ...
+            }
+            else
+            {
+                return NotFound("No previous OpenAI client found.");
+            }
+
+            return Ok();
+        }
+
         [HttpPost]
         public async Task<IActionResult> Post([FromBody] RequestModel model)
         {
             string apiKey = "YOUR_API_KEY";
-            string endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions";
+            string endpoint = "https://api.openai.com";
             string prompt = model.Prompt;
             int maxTokens = 50;
             double temperature = 0.5;
 
             var generatedText = await GenerateText(apiKey, endpoint, prompt, maxTokens, temperature);
 
+            // 将 OpenAI 客户端对象保存到会话中
+            var openAIClient = new OpenAIClient(apiKey, endpoint);
+            var clientBytes = Encoding.UTF8.GetBytes(openAIClient.ToJson());
+            _httpContextAccessor.HttpContext.Session.Set("OpenAIClient", clientBytes);
+
             return Ok(generatedText);
         }
 
         private async Task<string> GenerateText(string apiKey, string endpoint, string prompt, int maxTokens, double temperature)
         {
-            using (HttpClient client = new HttpClient())
-            {
-                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+            var openAIClient = new OpenAIClient(apiKey, endpoint);
 
-                var requestData = new
-                {
-                    prompt = prompt,
-                    max_tokens = maxTokens,
-                    temperature = temperature
-                };
+            // 使用 OpenAI 客户端对象进行调用
+            // ...
 
-                var jsonContent = new StringContent(
-                    JsonSerializer.Serialize(requestData),
-                    Encoding.UTF8,
-                    "application/json"
-                );
-
-                var response = await client.PostAsync(endpoint, jsonContent);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseBody = await response.Content.ReadAsStringAsync();
-                    // 解析并提取生成的文本
-                    var generatedText = JsonDocument.Parse(responseBody)
-                        .RootElement.GetProperty("choices")[0].GetProperty("text").GetString();
-
-                    return generatedText;
-                }
-                else
-                {
-                    return string.Empty;
-                }
-            }
+            return generatedText;
         }
     }
 
