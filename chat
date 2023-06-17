@@ -1,98 +1,77 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Distributed;
-using OpenAI;
+using Microsoft.AspNetCore.Http;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 
-namespace YourNamespace
+namespace YourNamespace.Controllers
 {
     [ApiController]
-    [Route("api/chat")]
-    public class ChatController : ControllerBase
+    [Route("api/[controller]")]
+    public class YourController : ControllerBase
     {
-        private readonly IDistributedCache _cache;
-        private readonly OpenAIClient _openAIClient;
-        private const string ApiKey = "your-api-key";
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public ChatController(IDistributedCache cache)
+        public YourController(IHttpContextAccessor httpContextAccessor)
         {
-            _cache = cache;
-            _openAIClient = new OpenAIClient(ApiKey);
+            _httpContextAccessor = httpContextAccessor;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] ChatRequest request)
+        public async Task<IActionResult> Post([FromBody] RequestModel model)
         {
-            // 从请求中获取用户问题和会话 ID
-            string userQuestion = request.Question;
-            string sessionId = request.SessionId;
+            string apiKey = "YOUR_API_KEY";
+            string endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions";
+            string prompt = model.Prompt;
+            int maxTokens = 50;
+            double temperature = 0.5;
 
-            // 从缓存中获取上下文
-            string context = await _cache.GetStringAsync(sessionId);
+            var generatedText = await GenerateText(apiKey, endpoint, prompt, maxTokens, temperature);
 
-            // 将用户问题与上下文合并
-            string mergedQuestion = MergeQuestionWithContex(userQuestion, context);
-
-            // 调用 Azure OpenAI ChatGPT 服务进行生成
-            string modelReply = await CallOpenAIChatGPT(mergedQuestion);
-
-            // 将生成的回复与上下文合并
-            string mergedContext = MergeContextWithContext(modelReply, context);
-
-            // 将合并后的上下文存储回缓存
-            await _cache.SetStringAsync(sessionId, mergedContext);
-
-            // 返回模型回复
-            return Ok(new ChatResponse
-            {
-                Reply = modelReply,
-                SessionId = sessionId
-            });
+            return Ok(generatedText);
         }
 
-        private async Task<string> CallOpenAIChatGPT(string input)
+        private async Task<string> GenerateText(string apiKey, string endpoint, string prompt, int maxTokens, double temperature)
         {
-            var chatRequest = new OpenAIApiCompletionRequest
+            using (HttpClient client = new HttpClient())
             {
-                Model = "text-davinci-002",
-                Messages = new List<OpenAIApiCompletionMessage>
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+
+                var requestData = new
                 {
-                    new OpenAIApiCompletionMessage
-                    {
-                        Role = "system",
-                        Content = input
-                    }
+                    prompt = prompt,
+                    max_tokens = maxTokens,
+                    temperature = temperature
+                };
+
+                var jsonContent = new StringContent(
+                    JsonSerializer.Serialize(requestData),
+                    Encoding.UTF8,
+                    "application/json"
+                );
+
+                var response = await client.PostAsync(endpoint, jsonContent);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    // 解析并提取生成的文本
+                    var generatedText = JsonDocument.Parse(responseBody)
+                        .RootElement.GetProperty("choices")[0].GetProperty("text").GetString();
+
+                    return generatedText;
                 }
-            };
-
-            var response = await _openAIClient.CreateCompletionAsync(chatRequest);
-
-            string modelReply = response.Choices[0].Text.Trim();
-            return modelReply;
-        }
-
-        private string MergeQuestionWithContex(string question, string context)
-        {
-            // 实现根据需要合并问题和上下文的逻辑
-            // 这里只是简单地将问题和上下文连接在一起
-            return $"{question} {context}";
-        }
-
-        private string MergeContextWithContext(string modelReply, string context)
-        {
-            // 实现根据需要合并回复和上下文的逻辑
-            // 这里只是简单地将回复和上下文连接在一起
-            return $"{modelReply} {context}";
+                else
+                {
+                    return string.Empty;
+                }
+            }
         }
     }
 
-    public class ChatRequest
+    public class RequestModel
     {
-        public string Question { get; set; }
-        public string SessionId { get; set; }
-    }
-
-    public class ChatResponse
-    {
-        public string Reply { get; set; }
-        public string SessionId { get; set; }
+        public string Prompt { get; set; }
     }
 }
