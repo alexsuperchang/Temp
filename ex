@@ -1,1 +1,0 @@
-<div class="col"><div class="card h-100"><img src="@($"/eform/attachfile/training/classcover/{trainClass.CaseID}.png")" class="card-img-top" alt="..."><div class="card-body"><h5 class="card-title">@trainClass.TrainName</h5><p class="card-text">這是課程的一些描述。</p></div></div></div>
